@@ -1,0 +1,84 @@
+# Load data
+library(readxl)
+germany_old= read_excel("dw_temperature in Germany.xlsx")
+
+# Data processing
+germany_old$Time_Era = ifelse(germany_old$year>1990, 
+                              "After 90s", "Before 90s")
+
+germany_old$Century = with(germany_old, ifelse(year<=1899,19,
+                      ifelse(year>=1900&year<=1999,20,
+                             ifelse(year>=2000,21,""))))
+
+germany_old$Avg_temp_year = rowMeans(germany_old[,2:13])
+
+# Sorting and reshuffling the data
+germany_old = germany_old[with(germany_old, order(-Avg_temp_year)),]
+
+germany_old = germany_old[, c(16,14,15, 1:13)]
+germany_old = germany_old[, c(4,1,2,3, 5:16)]
+
+# List of top 10 years with highest temperatures
+df = head(germany_old,10)
+df
+
+# Removing the missing data
+germany_old_1 = germany_old[-138,]
+
+# Scatter plot
+library(ggplot2)
+sp = ggplot(germany_old_1, aes(y=Avg_temp_year, x=year)) + 
+        geom_point(aes(color = factor(Time_Era))) +
+       theme_dark()
+sp
+
+# Box Plot
+bp = ggplot(germany_old_1, aes(y=Avg_temp_year, 
+      x = Time_Era, fill = Time_Era)) + geom_boxplot() + 
+  stat_summary(fun.y = "mean", geom = "point", 
+  colour = "mediumpurple4", shape = 15, size = 2)
+  
+bp
+
+# Value of means
+means=with(germany_old_1, by(Avg_temp_year, Time_Era, mean))
+means
+
+# Beeswarm plot
+library("beeswarm")
+bs=beeswarm(Avg_temp_year~Time_Era, data=germany_old_1,
+  col=sample(colors(),10), pch=19, cex=0.5, method="swarm") 
+
+# Testing difference in means using a permuation test
+library(mosaic)
+germany = germany_old_1[,c(3,2)]
+summary(germany)
+germany$Time_Era = as.vector(germany$Time_Era)
+
+# Calculating the observed difference in means
+observed = mean(Avg_temp_year~Time_Era, data = germany) %>%
+  diff()
+observed
+
+# Simulate a single trial
+mean(shuffle(Avg_temp_year)~Time_Era, data = germany) %>%
+  diff()
+
+# Create a randomization distribution
+germany_null = do(10000)*mean(shuffle(Avg_temp_year)~Time_Era,data = germany) %>%
+  diff()
+head(germany_null)
+
+# Plotting the distribution
+ggplot(data = germany_null) +
+      geom_histogram(mapping = aes(x=Before.90s)) + 
+  xlab("mean difference")
+
+# Superimposing a line indicating the original mean difference of 1.06 C
+ggplot(data = germany_null) +
+  geom_histogram(mapping = aes(x=Before.90s)) + 
+  xlab("mean difference") + 
+  geom_vline(xintercept = observed, linetype = 2, color = "Red")
+
+# Calculate the probability
+prop(~Before.90s <= observed, data = germany_null)
